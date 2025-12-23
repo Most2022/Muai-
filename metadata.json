@@ -1,0 +1,5 @@
+{
+  "name": "Muai Dashboard",
+  "description": "A sleek, modern dashboard for managing AI-driven 'Books' (chatbots), featuring a clean sidebar and interactive card layout inspired by the Muai platform.",
+  "requestFramePermissions": []
+}
