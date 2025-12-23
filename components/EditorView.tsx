@@ -5,7 +5,7 @@ import {
   Upload, Send, Mic, Maximize2, Minimize2, Loader2, FileText, CheckCircle2, Save, Type, Eye, AlertCircle, RotateCcw, Key
 } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
-import { BookMetadata } from '../App';
+import { BookMetadata } from '../App.tsx';
 
 // PDF.js for client-side text extraction
 import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@4.10.38/build/pdf.mjs';
@@ -16,12 +16,10 @@ interface EditorViewProps {
   bookId: string;
   initialTitle: string;
   onMetadataUpdate: (metadata: BookMetadata) => void;
-  customKeys: string[];
 }
 
 type Tab = 'hinglish' | 'explain' | 'summary' | 'chat';
 type LeftTab = 'create' | 'file';
-type FontSize = 'sm' | 'base' | 'lg' | 'xl' | '2xl';
 
 interface UploadedFile {
   id: string;
@@ -38,20 +36,14 @@ Start by writing content here or upload a document to get started. Use the navig
 You can use the AI tabs on the right to translate, explain, or summarize your content.`,
 ];
 
-export const EditorView: React.FC<EditorViewProps> = ({ onBack, bookId, initialTitle, onMetadataUpdate, customKeys }) => {
+export const EditorView: React.FC<EditorViewProps> = ({ onBack, bookId, initialTitle, onMetadataUpdate }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [activeTab, setActiveTab] = useState<Tab>('hinglish');
   const [activeLeftTab, setActiveLeftTab] = useState<LeftTab>('create');
-  const [fontSize, setFontSize] = useState<FontSize>('lg');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [title, setTitle] = useState(initialTitle);
   const [isSaving, setIsSaving] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
-  
-  // Use a Ref for the key index to ensure immediate updates across all concurrent requests
-  const currentKeyIndexRef = useRef(0);
-  const [, setRotationTrigger] = useState(0); // Dummy state to trigger UI re-renders on rotation
-  const [rotationNotice, setRotationNotice] = useState<string | null>(null);
   
   // Book content state
   const [pages, setPages] = useState<string[]>(DEFAULT_PAGES);
@@ -69,70 +61,29 @@ export const EditorView: React.FC<EditorViewProps> = ({ onBack, bookId, initialT
   const currentContent = pages[currentPage - 1] || "";
 
   /**
-   * Strictly uses custom user-provided keys from ApiSettings.
-   * Features cross-request synchronized rotation.
+   * Standard Gemini API call using process.env.API_KEY.
+   * Simplifies logic and complies with security/SDK requirements.
    */
-  const callWithRetryAndRotation = useCallback(async (contents: any, model = 'gemini-3-flash-preview') => {
-    const allKeys = customKeys.filter(k => !!k);
-    
-    if (allKeys.length === 0) {
-      throw new Error("No API keys found. Click 'API Key Manager' in the sidebar to add your keys.");
-    }
-
-    let attempts = 0;
-    const totalKeys = allKeys.length;
-
-    while (attempts < totalKeys) {
-      // Calculate which key to try next
-      const keyToUseIndex = (currentKeyIndexRef.current) % totalKeys;
-      const currentKey = allKeys[keyToUseIndex];
-      
-      try {
-        const ai = new GoogleGenAI({ apiKey: currentKey });
-        const response = await ai.models.generateContent({ model, contents });
-        return response;
-      } catch (error: any) {
-        console.warn(`Request failed with Key #${keyToUseIndex + 1}:`, error);
-        
-        // Extract error details as string for parsing
-        const errorBody = error?.response?.body || {};
-        const errorMsg = (error?.message || "").toLowerCase();
-        const errorStatus = error?.status || errorBody?.error?.code || 0;
-        
-        // Comprehensive check for 429 RESOURCE_EXHAUSTED
-        const isQuotaError = 
-          errorStatus === 429 ||
-          errorMsg.includes('429') || 
-          errorMsg.includes('quota') || 
-          errorMsg.includes('limit') || 
-          errorMsg.includes('exhausted') ||
-          JSON.stringify(error).includes('429');
-
-        if (isQuotaError && attempts < totalKeys - 1) {
-          attempts++;
-          
-          // Increment the SHARED index so ALL future calls start from the next key
-          currentKeyIndexRef.current = (currentKeyIndexRef.current + 1) % totalKeys;
-          setRotationTrigger(v => v + 1); // Force re-render of header indicator
-          
-          const nextIndex = (currentKeyIndexRef.current) % totalKeys;
-          setRotationNotice(`Key #${keyToUseIndex + 1} Quota Full. Switching to Key #${nextIndex + 1}...`);
-          
-          // Clear notice after delay
-          setTimeout(() => setRotationNotice(null), 5000);
-          
-          // Cool-down before next attempt
-          await new Promise(r => setTimeout(r, 600));
-          continue;
+  const callGemini = useCallback(async (contents: any, model = 'gemini-3-flash-preview') => {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({ 
+        model, 
+        contents,
+        config: {
+          temperature: 0.7,
         }
-        
-        // If it's not a quota error or we've run out of keys to rotate through
-        throw error;
+      });
+      return response;
+    } catch (error: any) {
+      console.error("Gemini API Error:", error);
+      const status = error?.status || 0;
+      if (status === 429 || error?.message?.includes('429')) {
+        throw new Error("API Quota Reached: Please wait a few moments before trying again.");
       }
+      throw new Error(error.message || "An error occurred while connecting to the AI service.");
     }
-    
-    throw new Error("All of your API keys have hit their quota limit. Please wait or add more keys in the manager.");
-  }, [customKeys]);
+  }, []);
 
   // Load existing data
   useEffect(() => {
@@ -219,11 +170,11 @@ export const EditorView: React.FC<EditorViewProps> = ({ onBack, bookId, initialT
         prompt = `Summarize into bullet points. Text: ${currentContent}`;
       }
 
-      const response = await callWithRetryAndRotation(prompt);
+      const response = await callGemini(prompt);
       setAiOutputs(prev => ({ ...prev, [cacheKey]: response.text || "" }));
     } catch (error: any) {
       console.error("AI Generation Error:", error);
-      setApiError(error.message || "An unexpected error occurred during transformation.");
+      setApiError(error.message);
     } finally {
       setLoading(false);
     }
@@ -231,7 +182,7 @@ export const EditorView: React.FC<EditorViewProps> = ({ onBack, bookId, initialT
 
   useEffect(() => {
     generateAIContent(activeTab);
-  }, [currentPage, activeTab, pages, customKeys]);
+  }, [currentPage, activeTab, pages]);
 
   const handleSendMessage = async () => {
     if (!chatMessage.trim() || loading) return;
@@ -244,7 +195,7 @@ export const EditorView: React.FC<EditorViewProps> = ({ onBack, bookId, initialT
     setChatHistory(prev => [...prev, { role: 'user', text: userText }]);
 
     try {
-      const response = await callWithRetryAndRotation(`Context: Book "${title}". Page ${currentPage}: "${currentContent}"\n\nQuestion: ${userText}`);
+      const response = await callGemini(`Context: Book "${title}". Page ${currentPage}: "${currentContent}"\n\nQuestion: ${userText}`);
       setChatHistory(prev => [...prev, { role: 'ai', text: response.text || "No response received." }]);
     } catch (error: any) {
       setChatHistory(prev => [...prev, { 
@@ -300,14 +251,6 @@ export const EditorView: React.FC<EditorViewProps> = ({ onBack, bookId, initialT
           </div>
         </div>
         <div className="flex items-center gap-4">
-          {customKeys.length > 0 && (
-            <div className="bg-teal-50 text-[#00897b] px-3 py-1.5 rounded-full border border-teal-100 flex items-center gap-2 animate-in zoom-in-95 duration-300">
-              <Key size={12} />
-              <span className="text-[9px] font-black uppercase tracking-widest">
-                Key #{ (currentKeyIndexRef.current % customKeys.length) + 1 } Active
-              </span>
-            </div>
-          )}
           <button 
             onClick={handleManualSave}
             disabled={isSaving}
@@ -321,16 +264,6 @@ export const EditorView: React.FC<EditorViewProps> = ({ onBack, bookId, initialT
 
       {/* Workspace */}
       <div className="flex flex-1 overflow-hidden p-4 gap-4 bg-[#fcfdfe] relative">
-        {/* Rotation Notice Toast */}
-        {rotationNotice && (
-          <div className="absolute top-4 right-8 z-[60] bg-orange-600 text-white px-6 py-4 rounded-[20px] text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl animate-in slide-in-from-right-8 fade-in flex items-center gap-4 border-2 border-orange-400/30">
-            <div className="bg-white/20 p-2 rounded-lg animate-pulse">
-              <Key size={18} />
-            </div>
-            {rotationNotice}
-          </div>
-        )}
-
         {!isFullscreen && (
           <div className="w-[300px] flex flex-col min-w-0">
             <div className="flex items-center justify-between mb-3 px-1">
@@ -382,7 +315,7 @@ export const EditorView: React.FC<EditorViewProps> = ({ onBack, bookId, initialT
             <div className="flex items-center justify-between mb-10">
               <div className="flex items-center gap-4">
                 <div className="bg-teal-500 p-3 rounded-2xl shadow-xl shadow-teal-100 text-white"><Sparkles size={24} /></div>
-                <div><h3 className="text-gray-900 font-black text-sm uppercase tracking-[0.2em]">AI {activeTab}</h3><p className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">Automatic Rotation Active</p></div>
+                <div><h3 className="text-gray-900 font-black text-sm uppercase tracking-[0.2em]">AI {activeTab}</h3><p className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">Powered by Gemini 3 Flash</p></div>
               </div>
               <div className="flex items-center gap-3">
                 <button onClick={() => setIsFullscreen(!isFullscreen)} className="text-gray-400 hover:text-teal-600 bg-gray-50 p-2.5 rounded-2xl border border-gray-100 active:scale-90 transition-all">{isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}</button>
@@ -402,9 +335,9 @@ export const EditorView: React.FC<EditorViewProps> = ({ onBack, bookId, initialT
                   <div className="bg-orange-50 p-6 rounded-full mb-6">
                     <AlertCircle size={40} className="text-orange-500" />
                   </div>
-                  <h4 className="text-lg font-black text-gray-900 mb-2">Service Error</h4>
+                  <h4 className="text-lg font-black text-gray-900 mb-2">Service Limit</h4>
                   <p className="text-xs text-gray-500 max-w-sm mb-8 font-medium leading-relaxed">{apiError}</p>
-                  <button onClick={() => generateAIContent(activeTab)} className="bg-gray-900 text-white px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all active:scale-95 shadow-xl"><RotateCcw size={14} className="inline mr-2" /> Force Retry</button>
+                  <button onClick={() => generateAIContent(activeTab)} className="bg-gray-900 text-white px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all active:scale-95 shadow-xl"><RotateCcw size={14} className="inline mr-2" /> Try Again</button>
                 </div>
               ) : (
                 <div className="animate-in fade-in duration-1000 max-w-4xl mx-auto">

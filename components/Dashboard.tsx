@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Plus, Pencil, MoreHorizontal, Sparkles, Trash2 } from 'lucide-react';
-import { BookMetadata } from '../App';
+import { BookMetadata } from '../App.tsx';
 
 interface BookCardProps {
   isCreator?: boolean;
