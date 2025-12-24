@@ -4,6 +4,7 @@ import { Sidebar } from './components/Sidebar.tsx';
 import { Header } from './components/Header.tsx';
 import { Dashboard } from './components/Dashboard.tsx';
 import { EditorView } from './components/EditorView.tsx';
+import { ApiSettings } from './components/ApiSettings.tsx';
 
 export type View = 'dashboard' | 'editor';
 
@@ -19,6 +20,11 @@ const App: React.FC = () => {
   const [view, setView] = useState<View>('dashboard');
   const [selectedBook, setSelectedBook] = useState<BookMetadata | null>(null);
   const [books, setBooks] = useState<BookMetadata[]>([]);
+  const [isApiSettingsOpen, setIsApiSettingsOpen] = useState(false);
+  const [customApiKeys, setCustomApiKeys] = useState<string[]>(() => {
+    const saved = localStorage.getItem('muai_custom_keys');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   // Load book list from localStorage on mount
   useEffect(() => {
@@ -35,6 +41,11 @@ const App: React.FC = () => {
       localStorage.setItem('muai_books_list', JSON.stringify(initialBooks));
     }
   }, []);
+
+  // Sync keys to local storage
+  useEffect(() => {
+    localStorage.setItem('muai_custom_keys', JSON.stringify(customApiKeys));
+  }, [customApiKeys]);
 
   const handleCreateBook = () => {
     const newId = Math.random().toString(36).substr(2, 9);
@@ -90,6 +101,7 @@ const App: React.FC = () => {
         <Sidebar 
           books={books} 
           onSelectBook={handleSelectBook} 
+          onOpenSettings={() => setIsApiSettingsOpen(true)}
         />
       )}
 
@@ -115,10 +127,18 @@ const App: React.FC = () => {
               bookId={selectedBook.id}
               initialTitle={selectedBook.title}
               onMetadataUpdate={handleSaveBookList}
+              customKeys={customApiKeys}
             />
           )
         )}
       </div>
+
+      <ApiSettings 
+        isOpen={isApiSettingsOpen} 
+        onClose={() => setIsApiSettingsOpen(false)} 
+        keys={customApiKeys}
+        setKeys={setCustomApiKeys}
+      />
     </div>
   );
 };

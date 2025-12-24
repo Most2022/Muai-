@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Settings } from 'lucide-react';
 import { BookMetadata } from '../App.tsx';
 
 interface SidebarItemProps {
@@ -28,8 +28,9 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ icon, label, isActive, onClic
 
 export const Sidebar: React.FC<{ 
   books: BookMetadata[], 
-  onSelectBook: (id: string) => void
-}> = ({ books, onSelectBook }) => {
+  onSelectBook: (id: string) => void,
+  onOpenSettings: () => void
+}> = ({ books, onSelectBook, onOpenSettings }) => {
   return (
     <aside className="w-64 border-r border-gray-100 flex flex-col py-8 px-4 h-screen sticky top-0 bg-white z-10">
       <div className="flex items-center gap-3 px-4 mb-12">
@@ -53,6 +54,13 @@ export const Sidebar: React.FC<{
       </div>
 
       <div className="mt-8 px-4 border-t border-gray-50 pt-8 flex flex-col gap-4">
+        <button 
+          onClick={onOpenSettings}
+          className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-gray-500 transition-all font-bold text-xs"
+        >
+          <Settings size={18} />
+          <span>API Key Manager</span>
+        </button>
         <div className="bg-gray-50 rounded-2xl p-4">
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Storage Status</p>
           <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">

@@ -44,7 +44,7 @@ export const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose, keys,
           <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-2xl flex gap-3">
             <AlertCircle className="text-blue-500 shrink-0" size={18} />
             <p className="text-xs text-blue-700 leading-relaxed font-medium">
-              The app uses only the keys you provide below. If a key hits its quota, it will automatically cycle to the next one.
+              Add up to 10 keys. If one key hits its quota limit, the app will automatically rotate to the next active key in your pool.
             </p>
           </div>
 
@@ -73,7 +73,7 @@ export const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose, keys,
 
             <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1 custom-scrollbar">
               <div className="flex items-center justify-between px-2 mb-2">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Active Backup Keys ({keys.length}/10)</span>
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Active Pool ({keys.length}/10)</span>
               </div>
               
               {keys.map((key, i) => (
@@ -95,7 +95,7 @@ export const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose, keys,
               {keys.length === 0 && (
                 <div className="py-12 text-center border-2 border-dashed border-gray-100 rounded-2xl flex flex-col items-center gap-2">
                   <Key size={32} className="text-gray-200" />
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">No API keys added yet</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">No keys added</p>
                 </div>
               )}
             </div>
